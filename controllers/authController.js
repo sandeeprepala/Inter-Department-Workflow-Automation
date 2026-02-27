@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 
 const Patient = require("../models/Patient");
 const Doctor = require("../models/Doctor");
+const Staff = require("../models/Staff");
 
 const generateToken = (user, role) => {
     return jwt.sign(
@@ -106,4 +107,71 @@ exports.loginDoctor = async (req, res) => {
 // LOGOUT (Client deletes token)
 exports.logout = async (req, res) => {
     res.json("Logged out (delete token client-side)");
+};
+
+
+// =============================
+// STAFF AUTHENTICATION
+// =============================
+
+// REGISTER STAFF (billing_person, lab_incharge, pharmacy, insurance_person, admin)
+exports.registerStaff = async (req, res) => {
+    try {
+        const { name, password, role } = req.body;
+
+        // Validate role
+        const validRoles = ["Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
+        if (!validRoles.includes(role)) {
+            return res.status(400).json("Invalid role. Valid roles: billing_person, lab_incharge, pharmacy, insurance_person, admin");
+        }
+
+        // Check if staff already exists
+        const existingStaff = await Staff.findOne({ name, role });
+        if (existingStaff) {
+            return res.status(400).json("Staff member with this name and role already exists");
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+
+        const staff = await Staff.create({
+            name,
+            role,
+            password: hashed
+        });
+
+        const token = generateToken(staff, role);
+
+        res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
+
+    } catch (err) {
+        res.status(500).json(err);
+    }
+};
+
+// LOGIN STAFF (billing_person, lab_incharge, pharmacy, insurance_person, admin)
+exports.loginStaff = async (req, res) => {
+    try {
+        const { name, password, role } = req.body;
+
+        // Validate role
+        const validRoles = ["Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
+        if (!validRoles.includes(role)) {
+            return res.status(400).json("Invalid role. Valid roles: billing_person, lab_incharge, pharmacy, insurance_person, admin");
+        }
+
+        const staff = await Staff.findOne({ name, role });
+
+        if (!staff) return res.status(404).json("Staff member not found");
+
+        const match = await bcrypt.compare(password, staff.password);
+
+        if (!match) return res.status(401).json("Wrong password");
+
+        const token = generateToken(staff, role);
+
+        res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
+
+    } catch (err) {
+        res.status(500).json(err);
+    }
 };

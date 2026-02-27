@@ -3,6 +3,7 @@ const Request = require("../models/Request");
 const RequestStage = require("../models/RequestStage");
 const Patient = require("../models/Patient");
 const Doctor = require("../models/Doctor");
+const Staff = require("../models/Staff");
 
 
 // =============================
@@ -53,23 +54,34 @@ exports.createRequest = async (req, res) => {
 
 
 // =============================
-// APPROVE STAGE (DOCTOR ONLY)
+// APPROVE STAGE (ALL AUTHORIZED STAFF)
 // =============================
 exports.approveStage = async (req, res) => {
   try {
 
-    // Role check
-    if (req.user.role !== "doctor")
-      return res.status(403).json("Only doctors can approve stages");
-
     const { requestId, department } = req.body;
+    const { role, id } = req.user;
 
-    // Fetch doctor
-    const doctor = await Doctor.findById(req.user.id);
-    if (!doctor)
-      return res.status(404).json("Doctor not found");
+    // Allowed roles
+    const allowedRoles = ["Doctor", "Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
+    if (!allowedRoles.includes(role))
+      return res.status(403).json("Only authorized personnel can approve stages");
 
-    const actedBy = doctor.doctorName;
+    // Fetch user based on role
+    let person;
+    let actedBy;
+
+    if (role === "doctor") {
+      person = await Doctor.findById(id);
+      if (!person)
+        return res.status(404).json("Doctor not found");
+      actedBy = person.doctorName;
+    } else {
+      person = await Staff.findById(id);
+      if (!person)
+        return res.status(404).json("Staff member not found");
+      actedBy = person.name;
+    }
 
     // Fetch request
     const request = await Request.findById(requestId);
@@ -137,6 +149,51 @@ exports.getRequestStatus = async (req, res) => {
 
   } catch (err) {
     console.error("Get Status Error:", err);
+    res.status(500).json(err);
+  }
+};
+
+
+// =============================
+// GET ALL REQUESTS FOR A USER
+// =============================
+// Finds requests for a patient (by patientName) or requests a staff/doctor has acted on
+exports.getRequestsForUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Try patient
+    let user = await Patient.findById(id);
+    if (user) {
+      const name = user.patientName || user.name;
+      const requests = await Request.find({ patientName: name }).sort({ createdAt: -1 });
+      return res.json({ user: { id: user._id, role: 'patient', name }, requests });
+    }
+
+    // Try doctor
+    user = await Doctor.findById(id);
+    if (user) {
+      const name = user.doctorName || user.name;
+      const stages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
+      const requestIds = [...new Set(stages.map(s => s.requestId.toString()))];
+      const requests = await Request.find({ _id: { $in: requestIds } });
+      return res.json({ user: { id: user._id, role: 'doctor', name }, requests, stages });
+    }
+
+    // Try staff
+    user = await Staff.findById(id);
+    if (user) {
+      const name = user.name;
+      const stages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
+      const requestIds = [...new Set(stages.map(s => s.requestId.toString()))];
+      const requests = await Request.find({ _id: { $in: requestIds } });
+      return res.json({ user: { id: user._id, role: user.role, name }, requests, stages });
+    }
+
+    return res.status(404).json("User not found");
+
+  } catch (err) {
+    console.error("Get Requests For User Error:", err);
     res.status(500).json(err);
   }
 };
