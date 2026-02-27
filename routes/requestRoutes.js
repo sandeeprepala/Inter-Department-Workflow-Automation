@@ -1,12 +1,17 @@
 const router = require("express").Router();
+const auth = require("../middleware/authMiddleware");
+
 const {
   createRequest,
   approveStage,
   getRequestStatus
 } = require("../controllers/requestController");
 
-router.post("/create", createRequest);
-router.post("/approve", approveStage);
-router.get("/:id", getRequestStatus);
+// Protected routes
+router.post("/create", auth, createRequest);
+router.post("/approve", auth, approveStage);
+
+// Public route (optional)
+router.get("/:id",auth, getRequestStatus);
 
 module.exports = router;

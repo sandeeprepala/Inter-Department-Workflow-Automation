@@ -1,11 +1,15 @@
 const express = require("express");
 const mongoose = require("mongoose");
+require("dotenv").config();
 
 const workflowRoutes = require("./routes/workflowRoutes");
 const requestRoutes = require("./routes/requestRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 app.use(express.json());
+app.use("/auth", authRoutes);
+
 
 // 🔹 Replace with your MongoDB URL
 const MONGO_URI = "mongodb+srv://sandeeprepala3_db_user:GSl5KsVferIH4XPX@cluster0.qnltds3.mongodb.net/?appName=Cluster0";
