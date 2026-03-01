@@ -8,7 +8,8 @@ const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 app.use(express.json());
-app.use("/auth", authRoutes);
+app.use(express.urlencoded({ extended: true }));
+app.use("/api/auth", authRoutes);
 
 
 // 🔹 Replace with your MongoDB URL

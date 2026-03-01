@@ -24,7 +24,7 @@ exports.registerPatient = async (req, res) => {
         });
 
         const token = generateToken(patient, "patient");
-
+        res.cookie("token" , token);
         res.json({ token });
 
     } catch (err) {
@@ -43,7 +43,7 @@ exports.registerDoctor = async (req, res) => {
         });
 
         const token = generateToken(doctor, "doctor");
-
+        res.cookie("token" , token);
         res.json({ token });
 
     } catch (err) {
@@ -69,7 +69,7 @@ exports.loginPatient = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(patient, "patient");
-
+        res.cookie("token" , token);
         res.json({ token });
 
     } catch (err) {
@@ -95,7 +95,7 @@ exports.loginDoctor = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(doctor, "doctor");
-
+        res.cookie("token" , token);
         res.json({ token });
 
     } catch (err) {
@@ -106,6 +106,7 @@ exports.loginDoctor = async (req, res) => {
 
 // LOGOUT (Client deletes token)
 exports.logout = async (req, res) => {
+    res.cookie("token" , "");
     res.json("Logged out (delete token client-side)");
 };
 
@@ -140,7 +141,7 @@ exports.registerStaff = async (req, res) => {
         });
 
         const token = generateToken(staff, role);
-
+        res.cookie("token" , token);
         res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
 
     } catch (err) {
@@ -168,7 +169,7 @@ exports.loginStaff = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(staff, role);
-
+        res.cookie("token" , token);
         res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
 
     } catch (err) {

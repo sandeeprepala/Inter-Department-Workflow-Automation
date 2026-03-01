@@ -3,7 +3,10 @@ const mongoose = require("mongoose");
 const patientSchema = new mongoose.Schema({
   patientName: String,
   disease: String,
-  doctorName: String,
+  doctorName: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Doctor"
+  },
   treatmentvisits: Number,
   treatmentStatus: [String],
   MedicineCost:Number,
