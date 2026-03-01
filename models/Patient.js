@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const patientSchema = new mongoose.Schema({
   patientName: String,
+  email: {
+    type: String,
+    unique: true,
+    required: true
+  },
   disease: String,
   doctorName: {
     type: mongoose.Schema.Types.ObjectId,
