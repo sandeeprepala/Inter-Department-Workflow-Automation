@@ -15,6 +15,10 @@ const generateToken = (user, role) => {
 
 // REGISTER PATIENT
 exports.registerPatient = async (req, res) => {
+    console.log("register patient");
+
+    console.log(req.body);
+
     try {
         const hashed = await bcrypt.hash(req.body.password, 10);
 
@@ -24,11 +28,12 @@ exports.registerPatient = async (req, res) => {
         });
 
         const token = generateToken(patient, "patient");
-
-        res.json({ token });
+        res.cookie("token", token);
+        res.json({ token, user: { id: patient._id, name: patient.patientName || patient.name, role: 'patient' } });
 
     } catch (err) {
-        res.status(500).json(err);
+        console.error("Register Patient Error:", err);
+        res.status(500).json(err.message || "Registration failed.");
     }
 };
 
@@ -43,11 +48,12 @@ exports.registerDoctor = async (req, res) => {
         });
 
         const token = generateToken(doctor, "doctor");
-
-        res.json({ token });
+        res.cookie("token", token);
+        res.json({ token, user: { id: doctor._id, name: doctor.doctorName || doctor.name, role: 'doctor' } });
 
     } catch (err) {
-        res.status(500).json(err);
+        console.error("Register Doctor Error:", err);
+        res.status(500).json(err.message || "Registration failed.");
     }
 };
 
@@ -69,8 +75,8 @@ exports.loginPatient = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(patient, "patient");
-
-        res.json({ token });
+        res.cookie("token", token);
+        res.json({ token, user: { id: patient._id, name: patient.patientName || patient.name, role: 'patient' } });
 
     } catch (err) {
         res.status(500).json(err);
@@ -95,8 +101,8 @@ exports.loginDoctor = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(doctor, "doctor");
-
-        res.json({ token });
+        res.cookie("token", token);
+        res.json({ token, user: { id: doctor._id, name: doctor.doctorName || doctor.name, role: 'doctor' } });
 
     } catch (err) {
         res.status(500).json(err);
@@ -106,6 +112,7 @@ exports.loginDoctor = async (req, res) => {
 
 // LOGOUT (Client deletes token)
 exports.logout = async (req, res) => {
+    res.cookie("token", "");
     res.json("Logged out (delete token client-side)");
 };
 
@@ -122,7 +129,7 @@ exports.registerStaff = async (req, res) => {
         // Validate role
         const validRoles = ["Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
         if (!validRoles.includes(role)) {
-            return res.status(400).json("Invalid role. Valid roles: billing_person, lab_incharge, pharmacy, insurance_person, admin");
+            return res.status(400).json("Invalid role. Valid roles: Billing, Lab, Pharmacy, Insurance, Admin");
         }
 
         // Check if staff already exists
@@ -140,11 +147,12 @@ exports.registerStaff = async (req, res) => {
         });
 
         const token = generateToken(staff, role);
-
+        res.cookie("token", token);
         res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
 
     } catch (err) {
-        res.status(500).json(err);
+        console.error("Register Staff Error:", err);
+        res.status(500).json("Registration failed. Staff ID may already exist.");
     }
 };
 
@@ -156,7 +164,7 @@ exports.loginStaff = async (req, res) => {
         // Validate role
         const validRoles = ["Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
         if (!validRoles.includes(role)) {
-            return res.status(400).json("Invalid role. Valid roles: billing_person, lab_incharge, pharmacy, insurance_person, admin");
+            return res.status(400).json("Invalid role. Valid roles: Billing, Lab, Pharmacy, Insurance, Admin");
         }
 
         const staff = await Staff.findOne({ name, role });
@@ -168,10 +176,11 @@ exports.loginStaff = async (req, res) => {
         if (!match) return res.status(401).json("Wrong password");
 
         const token = generateToken(staff, role);
-
+        res.cookie("token", token);
         res.json({ token, staff: { id: staff._id, name: staff.name, role: staff.role } });
 
     } catch (err) {
-        res.status(500).json(err);
+        console.error("Login Staff Error:", err);
+        res.status(500).json("Login failed. Check your connection.");
     }
 };

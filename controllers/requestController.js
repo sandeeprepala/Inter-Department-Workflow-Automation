@@ -62,16 +62,17 @@ exports.approveStage = async (req, res) => {
     const { requestId, department } = req.body;
     const { role, id } = req.user;
 
-    // Allowed roles
-    const allowedRoles = ["Doctor", "Billing", "Lab", "Pharmacy", "Insurance", "Admin"];
-    if (!allowedRoles.includes(role))
+    // Allowed roles (normalized to lowercase for easier check)
+    const allowedRoles = ["doctor", "billing", "lab", "pharmacy", "insurance", "admin"];
+    const normalizedRole = role.toLowerCase();
+    if (!allowedRoles.includes(normalizedRole))
       return res.status(403).json("Only authorized personnel can approve stages");
 
     // Fetch user based on role
     let person;
     let actedBy;
 
-    if (role === "doctor") {
+    if (normalizedRole === "doctor") {
       person = await Doctor.findById(id);
       if (!person)
         return res.status(404).json("Doctor not found");
@@ -97,8 +98,8 @@ exports.approveStage = async (req, res) => {
     if (!currentStage)
       return res.status(404).json("Stage not found");
 
-    // Validate department sequence
-    if (currentStage.department !== department)
+    // Validate department sequence (normalized case check)
+    if (currentStage.department.toLowerCase() !== department.toLowerCase())
       return res.status(403).json("Previous stage not approved yet");
 
     // Approve stage
@@ -157,7 +158,7 @@ exports.getRequestStatus = async (req, res) => {
 // =============================
 // GET ALL REQUESTS FOR A USER
 // =============================
-// Finds requests for a patient (by patientName) or requests a staff/doctor has acted on
+// Finds requests for a patient (by patientName) or requests a staff/doctor has acted on OR needs to act on
 exports.getRequestsForUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -167,27 +168,101 @@ exports.getRequestsForUser = async (req, res) => {
     if (user) {
       const name = user.patientName || user.name;
       const requests = await Request.find({ patientName: name }).sort({ createdAt: -1 });
-      return res.json({ user: { id: user._id, role: 'patient', name }, requests });
+
+      // For each request, get its stages
+      const requestsWithStages = await Promise.all(requests.map(async (req) => {
+        const stages = await RequestStage.find({ requestId: req._id }).sort("order");
+        return { ...req._doc, stages };
+      }));
+
+      return res.json({
+        user: {
+          id: user._id,
+          role: 'patient',
+          name,
+          treatmentvisits: user.treatmentvisits || 0,
+          MedicineCost: user.MedicineCost || 0,
+          LabCharges: user.LabCharges || 0,
+          insuranceClaim: user.insuranceClaim || 0
+        },
+        requests: requestsWithStages
+      });
     }
 
     // Try doctor
     user = await Doctor.findById(id);
     if (user) {
       const name = user.doctorName || user.name;
-      const stages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
-      const requestIds = [...new Set(stages.map(s => s.requestId.toString()))];
-      const requests = await Request.find({ _id: { $in: requestIds } });
-      return res.json({ user: { id: user._id, role: 'doctor', name }, requests, stages });
+
+      // 1. Get requests they've already acted on
+      const approvedStages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
+      const actedRequestIds = [...new Set(approvedStages.map(s => s.requestId.toString()))];
+
+      // 2. Get pending requests for "Doctor" department
+      // A request is pending for "Doctor" if its current stage department is "Doctor"
+      // This is a bit tricky with the current schema. We need to find stages with department "Doctor" 
+      // where the request's currentStageIndex matches the stage's order.
+
+      // Let's find all stages for department "Doctor" that are not yet approved
+      const pendingStages = await RequestStage.find({ department: "Doctor", approved: false });
+      const pendingRequestIds = [];
+
+      for (const stage of pendingStages) {
+        const reqObj = await Request.findById(stage.requestId);
+        if (reqObj && reqObj.currentStageIndex === stage.order) {
+          pendingRequestIds.push(stage.requestId.toString());
+        }
+      }
+
+      const allRequestIds = [...new Set([...actedRequestIds, ...pendingRequestIds])];
+      const requests = await Request.find({ _id: { $in: allRequestIds } }).sort({ updatedAt: -1 });
+
+      const requestsWithStages = await Promise.all(requests.map(async (req) => {
+        const stages = await RequestStage.find({ requestId: req._id }).sort("order");
+        return { ...req._doc, stages };
+      }));
+
+      return res.json({
+        user: { id: user._id, role: 'doctor', name },
+        requests: requestsWithStages,
+        pendingRequestIds
+      });
     }
 
     // Try staff
     user = await Staff.findById(id);
     if (user) {
       const name = user.name;
-      const stages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
-      const requestIds = [...new Set(stages.map(s => s.requestId.toString()))];
-      const requests = await Request.find({ _id: { $in: requestIds } });
-      return res.json({ user: { id: user._id, role: user.role, name }, requests, stages });
+      const dept = user.role; // e.g., "Billing", "Lab", etc.
+
+      // 1. Get requests they've already acted on
+      const approvedStages = await RequestStage.find({ actedBy: name }).sort({ approvedAt: -1 });
+      const actedRequestIds = [...new Set(approvedStages.map(s => s.requestId.toString()))];
+
+      // 2. Get pending requests for their department
+      const pendingStages = await RequestStage.find({ department: dept, approved: false });
+      const pendingRequestIds = [];
+
+      for (const stage of pendingStages) {
+        const reqObj = await Request.findById(stage.requestId);
+        if (reqObj && reqObj.currentStageIndex === stage.order) {
+          pendingRequestIds.push(stage.requestId.toString());
+        }
+      }
+
+      const allRequestIds = [...new Set([...actedRequestIds, ...pendingRequestIds])];
+      const requests = await Request.find({ _id: { $in: allRequestIds } }).sort({ updatedAt: -1 });
+
+      const requestsWithStages = await Promise.all(requests.map(async (req) => {
+        const stages = await RequestStage.find({ requestId: req._id }).sort("order");
+        return { ...req._doc, stages };
+      }));
+
+      return res.json({
+        user: { id: user._id, role: dept.toLowerCase(), name },
+        requests: requestsWithStages,
+        pendingRequestIds
+      });
     }
 
     return res.status(404).json("User not found");
