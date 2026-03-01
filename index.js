@@ -18,9 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 
 
-// 🔹 Replace with your MongoDB URL
-const MONGO_URI = "mongodb+srv://sandeeprepala3_db_user:GSl5KsVferIH4XPX@cluster0.qnltds3.mongodb.net/?appName=Cluster0";
-
+const MONGO_URI = process.env.MONGO_URI ;
 mongoose.connect(MONGO_URI)
     .then(() => {
         console.log("✅ Connected to MongoDB Database");
